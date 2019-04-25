@@ -38,7 +38,7 @@ def template(name=None):
 
 @app.route("/signature")
 def signature():
-    return(render_template('signature.html'))
+    return(render_template('form.html'))
 # ---------------------------------------------------------
 
 # PRINCIPAL
