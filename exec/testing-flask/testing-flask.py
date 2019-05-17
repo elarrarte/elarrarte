@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 # INFORMACION DEL SCRIPT
 # ---------------------------------------------------------
@@ -35,14 +35,12 @@ def index():
 @app.route("/template/<name>")
 def template(name=None):
     return(render_template('template.html', name=name))
-
-@app.route("/signature")
-def signature():
-    return(render_template('form.html'))
 # ---------------------------------------------------------
 
 # PRINCIPAL
 # ---------------------------------------------------------
+if __name__ == "__main__":
+    app.run(ssl_context='adhoc')
 # ---------------------------------------------------------
 
 

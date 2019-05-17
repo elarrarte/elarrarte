@@ -30,40 +30,79 @@ import json
 # ---------------------------------------------------------
 app = Flask(__name__)
 
-#@app.route('/api/signature/<t_acct_uid>/<t_acct_cn>/<t_acct_ou>/<t_acct_phone>/<t_acct_mobile>')
-#def create_signature(t_acct_uid, t_acct_cn, t_acct_ou, t_acct_phone, t_acct_mobile):
-#    t_status = 'OK'
-#    t_signature = render_template('signature.html',
-#        t_acct_uid=t_acct_uid, t_acct_cn=t_acct_cn, t_acct_ou=t_acct_ou,
-#        t_acct_phone=t_acct_phone, t_acct_mobile=t_acct_mobile)
-#    j_reply = json.dumps({"status": t_status, "signature": t_signature})
-#    return(j_reply)
+def render_signature(signature_data):
+    t_signature = ""
 
-def dict_reply(t_status, t_msg):
-    return({"status": t_status, "msg": t_msg})
+    if\
+    (
+        not
+        (
+            't_acct_uid' in signature_data.keys() and
+            't_acct_cn' in signature_data.keys() and
+            't_acct_ou' in signature_data.keys() and
+            't_acct_phone' in signature_data.keys() and
+            't_acct_mobile' in signature_data.keys()
+        )
+    ):
+        return(main.EXIT_ERR, t_signature)
 
-@app.route('/api/signature', methods=['POST'])
+    t_signature = render_template\
+    (
+        "signature.html",
+        t_acct_uid=signature_data['t_acct_uid'],
+        t_acct_cn=signature_data['t_acct_cn'],
+        t_acct_ou=signature_data['t_acct_ou'],
+        t_acct_phone=signature_data['t_acct_phone'],
+        t_acct_mobile=signature_data['t_acct_mobile']
+    )
+
+    return(main.EXIT_OK, t_signature)
+
+def output(t_format, t_status, t_msg):
+    if(t_format == 'raw'):
+        return(t_msg)
+
+    if(t_format == 'json'):
+        return(json.dumps({"t_status": t_status, "t_msg": t_msg}, indent=4) + '\n')
+
+@app.route('/signature/api/create', methods=['POST'])
 def create_signature():
-    if(not request.json):
-        d_reply = dict_reply('ERROR', 'NOT A JSON REQUEST')
-        return(json.dumps(d_reply, indent=4) + '\n')
+    formats = ['raw', 'json']
+    t_format = 'json'
 
-    if("t_acct_uid" not in request.json.keys() or
+    if(request.args.get('format')):
+        if(request.args.get('format') in formats):
+            t_format = request.args.get('format')
+        else:
+            return(output(t_format, main.EXIT_ERR, 'UNKNOWN FORMAT'))
+
+    if(not request.json):
+        return(output(t_format, main.EXIT_ERR, 'NOT A JSON REQUEST'))
+
+    if\
+    (
+        "t_acct_uid" not in request.json.keys() or
         "t_acct_cn" not in request.json.keys() or
         "t_acct_ou" not in request.json.keys() or
         "t_acct_phone" not in request.json.keys() or
-        "t_acct_mobile" not in request.json.keys()):
-        d_reply = dict_reply('ERROR', 'INVALID API REQUEST')
-        return(json.dumps(d_reply, indent=4) + '\n')
+        "t_acct_mobile" not in request.json.keys()
+    ):
+        return(output(t_format, main.EXIT_ERR, 'INVALID API REQUEST'))
 
-    d_reply = dict_reply('OK', 'SIGNATURE CREATED')
-    d_reply["signature"] = render_template('signature.html',
-        t_acct_uid=request.json['t_acct_uid'],
-        t_acct_cn=request.json['t_acct_cn'],
-        t_acct_ou=request.json['t_acct_ou'],
-        t_acct_phone=request.json['t_acct_phone'],
-        t_acct_mobile=request.json['t_acct_mobile'])
-    return(json.dumps(d_reply, indent=4) + '\n')
+    signature_data =\
+    {
+        't_acct_uid': request.json['t_acct_uid'],
+        't_acct_cn': request.json['t_acct_cn'],
+        't_acct_ou': request.json['t_acct_ou'],
+        't_acct_phone': request.json['t_acct_phone'],
+        't_acct_mobile': request.json['t_acct_mobile']
+    }
+
+    n_ec, t_signature = render_signature(signature_data)
+    if(n_ec):
+        return(output(t_format, main.EXIT_ERR, "ERROR render_signature()"))
+    else:
+        return(output(t_format, main.EXIT_OK, t_signature))
 
 @app.route("/signature")
 def signature():
@@ -72,6 +111,8 @@ def signature():
 
 # PRINCIPAL
 # ---------------------------------------------------------
+if __name__ == "__main__":
+    app.run(ssl_context='adhoc')
 # ---------------------------------------------------------
 
 
