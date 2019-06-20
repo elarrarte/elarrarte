@@ -15,6 +15,7 @@
 import os
 import sys
 sys.path.append(os.environ['SCRIPTS'] + '/include')
+from posix_exitcodes import *
 import main
 # ---------------------------------------------------------
 
@@ -28,7 +29,7 @@ import main
 
 # PRINCIPAL
 # ---------------------------------------------------------
-exit(main.EXIT_OK)
+exit(EXIT_SUCCESS)
 # ---------------------------------------------------------
 
 

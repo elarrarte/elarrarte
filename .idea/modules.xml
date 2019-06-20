@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/elarrarte.iml" filepath="$PROJECT_DIR$/.idea/elarrarte.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../soc-scripts/.idea/soc-scripts.iml" filepath="$PROJECT_DIR$/../soc-scripts/.idea/soc-scripts.iml" />
     </modules>
   </component>
 </project>
