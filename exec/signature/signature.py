@@ -16,10 +16,12 @@
 # ---------------------------------------------------------
 import os
 import sys
-sys.path.append(os.environ['SCRIPTS'] + '/include')
+if('SCRIPTS' in os.environ.keys()):
+    sys.path.append(os.environ['SCRIPTS'] + '/include')
 import main
 from flask import Flask, render_template, request, jsonify
 import json
+from posix_exitcodes import *
 # ---------------------------------------------------------
 
 # CONFIGURACION
@@ -44,7 +46,7 @@ def render_signature(signature_data):
             't_acct_mobile' in signature_data.keys()
         )
     ):
-        return(main.EXIT_ERR, t_signature)
+        return(EXIT_FAILURE, t_signature)
 
     t_signature = render_template\
     (
@@ -56,7 +58,7 @@ def render_signature(signature_data):
         t_acct_mobile=signature_data['t_acct_mobile']
     )
 
-    return(main.EXIT_OK, t_signature)
+    return(EXIT_SUCCESS, t_signature)
 
 def output(t_format, t_status, t_msg):
     if(t_format == 'raw'):
@@ -74,35 +76,36 @@ def create_signature():
         if(request.args.get('format') in formats):
             t_format = request.args.get('format')
         else:
-            return(output(t_format, main.EXIT_ERR, 'UNKNOWN FORMAT'))
+            return(output(t_format, EXIT_FAILURE, 'UNKNOWN FORMAT'))
 
-    if(not request.json):
-        return(output(t_format, main.EXIT_ERR, 'NOT A JSON REQUEST'))
+    if(t_format == "json"):
+        if(not request.json):
+            return(output(t_format, EXIT_FAILURE, 'NOT A JSON REQUEST'))
 
-    if\
-    (
-        "t_acct_uid" not in request.json.keys() or
-        "t_acct_cn" not in request.json.keys() or
-        "t_acct_ou" not in request.json.keys() or
-        "t_acct_phone" not in request.json.keys() or
-        "t_acct_mobile" not in request.json.keys()
-    ):
-        return(output(t_format, main.EXIT_ERR, 'INVALID API REQUEST'))
+        if\
+        (
+            "t_acct_uid" not in request.json.keys() or
+            "t_acct_cn" not in request.json.keys() or
+            "t_acct_ou" not in request.json.keys() or
+            "t_acct_phone" not in request.json.keys() or
+            "t_acct_mobile" not in request.json.keys()
+        ):
+            return(output(t_format, EXIT_FAILURE, 'INVALID API REQUEST'))
 
-    signature_data =\
-    {
-        't_acct_uid': request.json['t_acct_uid'],
-        't_acct_cn': request.json['t_acct_cn'],
-        't_acct_ou': request.json['t_acct_ou'],
-        't_acct_phone': request.json['t_acct_phone'],
-        't_acct_mobile': request.json['t_acct_mobile']
-    }
+        signature_data =\
+        {
+            't_acct_uid': request.json['t_acct_uid'],
+            't_acct_cn': request.json['t_acct_cn'],
+            't_acct_ou': request.json['t_acct_ou'],
+            't_acct_phone': request.json['t_acct_phone'],
+            't_acct_mobile': request.json['t_acct_mobile']
+        }
 
     n_ec, t_signature = render_signature(signature_data)
     if(n_ec):
-        return(output(t_format, main.EXIT_ERR, "ERROR render_signature()"))
+        return(output(t_format, EXIT_FAILURE, "ERROR render_signature()"))
     else:
-        return(output(t_format, main.EXIT_OK, t_signature))
+        return(output(t_format, EXIT_SUCCESS, t_signature))
 
 @app.route("/signature")
 def signature():
@@ -112,7 +115,8 @@ def signature():
 # PRINCIPAL
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    app.run(ssl_context='adhoc')
+    # app.run(ssl_context='adhoc')
+    app.run()
 # ---------------------------------------------------------
 
 
