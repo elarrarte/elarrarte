@@ -33,7 +33,12 @@ FIELD_QUEEN = 'Q'
 # ---------------------------------------------------------
 
 # Print a board
-def print_board(board):
+def print_solution(l_solution):
+	board = new_board()
+
+	for queen in l_solution:
+		board[queen["y"]][queen["x"]] = FIELD_QUEEN
+
 	for n_y in range(BOARD_SIZE):
 		for n_x in range(BOARD_SIZE):
 			print(board[n_y][n_x], end=" ")
@@ -41,12 +46,12 @@ def print_board(board):
 	print()
 
 # Tell if a given coordinate is threaten by other queens
-def not_threaten(board, n_queen_y, n_queen_x):
-	for n_y in range(BOARD_SIZE):
-		for n_x in range(BOARD_SIZE):
-			if (n_y == n_queen_y or n_x == n_queen_x) and board[n_y][n_x] == FIELD_QUEEN: return False
-			if ((n_y - n_queen_y) == (n_x - n_queen_x)) and board[n_y][n_x] == FIELD_QUEEN: return False
-			if ((n_y - n_queen_y) == -(n_x - n_queen_x)) and board[n_y][n_x] == FIELD_QUEEN: return False
+def not_threaten(l_solution, n_queen_y, n_queen_x):
+	for queen in l_solution:
+		if queen["y"] == n_queen_y or queen["x"] == n_queen_x: return False
+		if (queen["y"] - n_queen_y) == (queen["x"] - n_queen_x): return False
+		if (queen["y"] - n_queen_y) == -(queen["x"] - n_queen_x): return False
+
 	return True
 
 # Return a new board
@@ -54,31 +59,31 @@ def new_board():
 	return [[FIELD_EMPTY for i in range(BOARD_SIZE)] for i in range(BOARD_SIZE)]
 
 # Try to add a not threatening queen to the board
-def add_queens(board=new_board(), n_queens=BOARD_SIZE, n_offset_from=0):
-	global n_solutions
+def add_queens(l_solution=[], n_queens=BOARD_SIZE, n_offset_from=0):
+	global l_solutions
 
 	if n_queens:
 		for n_offset in range(n_offset_from, BOARD_SIZE**2):
 			n_y = n_offset // BOARD_SIZE
 			n_x = n_offset % BOARD_SIZE
-			if not_threaten(board, n_y, n_x):
-				tmp_board = copy.deepcopy(board)
-				tmp_board[n_y][n_x] = FIELD_QUEEN
-				add_queens(tmp_board, n_queens-1, n_offset+(BOARD_SIZE-n_x))
+			if not_threaten(l_solution, n_y, n_x):
+				l_tmp_solution = copy.deepcopy(l_solution)
+				l_tmp_solution.append({"y": n_y, "x": n_x})
+				add_queens(l_tmp_solution, n_queens-1, n_offset+(BOARD_SIZE-n_x))
 	else:
 		print("SOLUTION FOUND!")
-		print_board(board)
-		n_solutions += 1
+		print_solution(l_solution)
+		l_solutions.append(l_solution)
 
 # Main function
 def main():
 	add_queens()
-	print("SOLUTIONS: %d" % (n_solutions))
+	print("SOLUTIONS: %d" % (len(l_solutions)))
 # ---------------------------------------------------------
 
 # PRINCIPAL
 # ---------------------------------------------------------
-n_solutions = 0
+l_solutions = []
 main()
 exit(EXIT_SUCCESS)
 # ---------------------------------------------------------
