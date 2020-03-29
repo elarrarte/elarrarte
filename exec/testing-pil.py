@@ -7,7 +7,7 @@
 # VERSION : 01
 #
 # DESCRIPCION
-# Este script lee las las imagenes (cartas) de un directorio
+# Este script lee las imagenes (cartas) de un directorio
 # y las agrupa en un PDF con el objetivo de imprimirlas.
 # El tamaño de la hoja y de la carta se pueden especificar.
 # ---------------------------------------------------------
