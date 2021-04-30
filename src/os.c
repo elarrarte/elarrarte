@@ -219,7 +219,11 @@ void print_queues(list_t *cpu_queue, list_t *io_queues[], list_t *process_queues
 #define CPU_CORES        2
 list_t *cpu_queue, *io_queues[IO_DEVICES_SIZE], *process_queues[PROCESS_STATES_SIZE];
 #define CPU_CYCLE        1
+<<<<<<< HEAD
 #define QUANTUM          2
+=======
+#define QUANTUM          1
+>>>>>>> dev
 #define QUANTUM_UNSET   -1
 int quantum = QUANTUM_UNSET;
 
@@ -299,7 +303,11 @@ void handle_cpu_instruction(pcb_t *pcb)
     // set the QUANTUM after context switching    
     if(quantum == QUANTUM_UNSET)
     {
+<<<<<<< HEAD
         quantum = QUANTUM;
+=======
+        quantum = QUANTUM * pcb->priority;
+>>>>>>> dev
     }
 
     // process only if QUANTUM is available
