@@ -8,6 +8,7 @@
 #include <string.h>
 #include <signal.h>
 #include <wait.h>
+#include <curses.h>
 #include "../include/posix_exitcodes.h"
 #include "../include/boolean.h"
 #include "../include/list.h"
@@ -17,7 +18,7 @@
 #define MAX_PROCESSES                                       10
 #define MAX_UID                                             65535
 #define MAX_GID                                             65535
-#define MAX_INSTRUCTIONS                                    10
+#define MAX_INSTRUCTIONS                                    3
 #define MAX_INSTRUCTION_SIZE                                5
 
 #define PROCESS_SLEEP                                       1
@@ -30,6 +31,9 @@
 #define CPU_THREAD_SLEEP                                    1
 #define IO_THREAD_SLEEP                                     1
 #define MAX_THREAD_NAME                                     255
+
+#define WINDOW_WIDTH                                        10
+#define WINDOW_HEIGHT                                       20
 
 #define INSTRUCTION_TYPES_SIZE                              2
 typedef enum {IO, CPU} instruction_type_t;
@@ -46,13 +50,6 @@ char *PROCESS_PRIORITIES[] = {"LOW", "MEDIUM", "HIGH"};
 #define PROCESS_STATES_SIZE                                 6
 typedef enum {NEW, ACTIVE, READY, RUNNING, WAITING, FINISHED} process_state_t;
 char *PROCESS_STATES[] = {"NEW", "ACTIVE", "READY", "RUNNING", "WAITING", "FINISHED"};
-
-// VM resources
-#define CPU_CORES                                           4
-list_t *cpu_queue, *io_queues[IO_DEVICES_SIZE], *process_queues[PROCESS_STATES_SIZE];
-pthread_t cpu_threads[CPU_CORES], io_threads[IO_DEVICES_SIZE];
-//pthread_mutex_t cpu_queue_mutex, io_queues_mutex[IO_DEVICES_SIZE], process_queues_mutex[PROCESS_STATES_SIZE];
-pthread_mutex_t mutex;
 
 typedef struct
 {
@@ -84,6 +81,21 @@ typedef struct pcb
 
 } pcb_t;
 
+typedef struct
+{
+    WINDOW *window;
+    list_t *list;
+
+} window_t;
+
+// VM resources
+#define CPU_CORES                                           4
+list_t *cpu_queue, *io_queues[IO_DEVICES_SIZE], *process_queues[PROCESS_STATES_SIZE];
+window_t windows[IO_DEVICES_SIZE + PROCESS_STATES_SIZE + 1];
+WINDOW *process_window;
+pthread_t cpu_threads[CPU_CORES], io_threads[IO_DEVICES_SIZE];
+pthread_mutex_t mutex;
+
 pcb_t *create_pcb(pid_t pid)
 {
     pcb_t *pcb;
@@ -97,20 +109,20 @@ pcb_t *create_pcb(pid_t pid)
     pcb->uid = rand() % MAX_UID;
     pcb->gid = rand() % MAX_GID;
     memset(&pcb->stats, 0, sizeof(process_stats_t));
-    pcb->instructions = 1;
-    //pcb->instructions = (rand() % MAX_INSTRUCTIONS) + 1;
+    //pcb->instructions = 1;
+    pcb->instructions = (rand() % MAX_INSTRUCTIONS) + 1;
     pcb->program = (instruction_t *) malloc(sizeof(instruction_t) * pcb->instructions);
     instruction = pcb->program;
     for(index = 0; index < pcb->instructions; index++)
     {
-        //instruction->type = CPU;
+        //instruction->type = IO;
         instruction->type = rand() % INSTRUCTION_TYPES_SIZE;
         //instruction->size = 10;
         instruction->size = (rand() % MAX_INSTRUCTION_SIZE) + 1;
         if(instruction->type == IO)
         {
-            instruction->device = PRINTER;
-            //instruction->device = rand() % IO_DEVICES_SIZE;   
+            //instruction->device = HDD;
+            instruction->device = rand() % IO_DEVICES_SIZE;   
         }
         instruction++;
     }
@@ -150,102 +162,59 @@ void print_pcb(pcb_t *pcb)
     int index;
     instruction_t *instruction;
 
-    printf("PCB\n");
-    printf("-----------------------------------------------\n");
-    printf("[GENERAL]\n");
-    printf("PRIORITY             : %s\n", PROCESS_PRIORITIES[pcb->priority]);
-    printf("PID                  : %d\n", pcb->pid);
-    printf("UID                  : %d\n", pcb->uid);
-    printf("GID                  : %d\n", pcb->gid);
-    printf("STATE                : %s\n", PROCESS_STATES[pcb->state]);
-    printf("\n[STATS]\n");
-    printf("EXECUTION TIME       : %d\n", pcb->stats.execution_time);
-    printf("CPU TIME             : %d\n", pcb->stats.cpu_time);
-    printf("IO TIME              : %d\n", pcb->stats.io_time);
-    printf("\n[PROGRAM]\n");
-    printf("INSTRUCTIONS         : %d\n", pcb->instructions);
+    wclear(process_window);
+    wprintw(process_window, "PCB\n");
+    wprintw(process_window, "[GENERAL]\n");
+    wprintw(process_window, "PRIORITY             : %s\n", PROCESS_PRIORITIES[pcb->priority]);
+    wprintw(process_window, "PID                  : %d\n", pcb->pid);
+    wprintw(process_window, "UID                  : %d\n", pcb->uid);
+    wprintw(process_window, "GID                  : %d\n", pcb->gid);
+    wprintw(process_window, "STATE                : %s\n", PROCESS_STATES[pcb->state]);
+    wprintw(process_window, "\n[STATS]\n");
+    wprintw(process_window, "EXECUTION TIME       : %d\n", pcb->stats.execution_time);
+    wprintw(process_window, "CPU TIME             : %d\n", pcb->stats.cpu_time);
+    wprintw(process_window, "IO TIME              : %d\n", pcb->stats.io_time);
+    wprintw(process_window, "\n[PROGRAM]\n");
+    wprintw(process_window, "INSTRUCTIONS         : %d\n", pcb->instructions);
     instruction = pcb->program;
     for(index = 0; index < pcb->instructions; index++)
     {
-        printf("INSTRUCION[%d] TYPE   : %s\n", index, INSTRUCTION_TYPES[instruction->type]);
-        printf("INSTRUCION[%d] SIZE   : %d\n", index, instruction->size);
+        wprintw(process_window, "INSTRUCION[%d] TYPE   : %s\n", index, INSTRUCTION_TYPES[instruction->type]);
+        wprintw(process_window, "INSTRUCION[%d] SIZE   : %d\n", index, instruction->size);
         if(instruction->type == IO)
         {
-            printf("INSTRUCION[%d] DEVICE : %s\n", index, IO_DEVICES[instruction->device]);
+            wprintw(process_window, "INSTRUCION[%d] DEVICE : %s\n", index, IO_DEVICES[instruction->device]);
         }
         instruction++;
     }
-    printf("-----------------------------------------------\n");
+    wrefresh(process_window);
 }
+
 
 void print_queues()
 {
+    node_t *node;
+    pcb_t *pcb;
     int index;
-    int queue_data;
-    node_t *cpu, *io[IO_DEVICES_SIZE], *process[PROCESS_STATES_SIZE];
 
     pthread_mutex_lock(&mutex);
-
-    cpu = cpu_queue->head;
-    for(index = 0; index < IO_DEVICES_SIZE; index++)
+    for(index = 0; index < PROCESS_STATES_SIZE + IO_DEVICES_SIZE + 1; index++)
     {
-        io[index] = io_queues[index]->head;
+        wclear(windows[index].window);
+        node = windows[index].list->head;
+        while(node != NULL)
+        {
+            pcb = (pcb_t *) node->data;
+            wprintw(windows[index].window, "%d\n", pcb->pid);
+            node = node->next;
+        }
+        wnoutrefresh(windows[index].window);
     }
-    for(index = 0; index < PROCESS_STATES_SIZE; index++)
-    {
-        process[index] = process_queues[index]->head;
-    }
-
-    printf("     CPU KEYBOARD  MONITOR    MOUSE      USB  PRINTER      HDD      GPU      NEW   ACTIVE    READY  RUNNING  WAITING FINISHED\n");
-    do
-    {
-        queue_data = FALSE;
-
-        if(cpu != NULL)
-        {
-            printf("%8d ", ((pcb_t *) cpu->data)->pid);
-            cpu = cpu->next;
-            if(cpu != NULL) queue_data = TRUE;
-        }
-        else
-        {
-            printf("%8d ", 0);
-        }
-
-        for(index = 0; index < IO_DEVICES_SIZE; index++)
-        {
-            if(io[index] != NULL)
-            {
-                printf("%8d ", ((pcb_t *) io[index]->data)->pid);
-                io[index] = io[index]->next;
-                if(io[index] != NULL) queue_data = TRUE;
-            }
-            else
-            {
-                printf("%8d ", 0);
-            }
-        }
-
-        for(index = 0; index < PROCESS_STATES_SIZE; index++)
-        {
-            if(process[index] != NULL)
-            {
-                printf("%8d ", ((pcb_t *) process[index]->data)->pid);
-                process[index] = process[index]->next;
-                if(process[index] != NULL) queue_data = TRUE;
-            }
-            else
-            {
-                printf("%8d ", 0);
-            }
-        }
-        printf("\n");
-
-    } while (queue_data);
-    printf("\n");
-
-   pthread_mutex_unlock(&mutex);
+    wnoutrefresh(process_window);
+    doupdate();
+    pthread_mutex_unlock(&mutex);
 }
+
 
 void finish_pcb(pcb_t *pcb)
 {
@@ -257,10 +226,10 @@ void finish_pcb(pcb_t *pcb)
     list_remove_data(process_queues[ACTIVE], pcb);
     list_add_tail(process_queues[FINISHED], pcb);
     pcb->state = FINISHED;
-    print_pcb(pcb);
+    //print_pcb(pcb);
     kill(pcb->pid, SIGUSR1);
     waitpid(pcb->pid, &child_status, 0);
-    printf("child exitcode    : %d\n\n", WEXITSTATUS(child_status));
+    //printf("child exitcode    : %d\n\n", WEXITSTATUS(child_status));
     pthread_mutex_unlock(&mutex);
 }
 
@@ -437,17 +406,29 @@ void *io_thread(void *vp_device)
 
 void initialize_resources()
 {
-    int index, exitcode, *device, *cpuid;
+    int index, window_index = 0, exitcode, *device, *cpuid;
     char thread_name[MAX_THREAD_NAME];
+    node_t *node;
+
+    initscr();
+    cbreak();
+    noecho();
+    curs_set(FALSE);
 
     for(index = 0; index < PROCESS_STATES_SIZE; index++)
     {
         process_queues[index] = list_new();
+        windows[window_index].list = process_queues[index];
+        windows[window_index].window = newwin(WINDOW_HEIGHT, WINDOW_WIDTH, 0, 10 * window_index);
+        window_index++;
     }
 
     for(index = 0; index < IO_DEVICES_SIZE; index++)
     {
         io_queues[index] = list_new();
+        windows[window_index].list = io_queues[index];
+        windows[window_index].window = newwin(WINDOW_HEIGHT, WINDOW_WIDTH, 0, 10 * window_index);
+        window_index++;
         device = (int *) malloc(sizeof(int));
         *device = index;
         exitcode = pthread_create(&io_threads[index], NULL, io_thread, (void *) device);
@@ -463,6 +444,9 @@ void initialize_resources()
     }
 
     cpu_queue = list_new();
+    windows[window_index].list = cpu_queue;
+    windows[window_index].window = newwin(WINDOW_HEIGHT, WINDOW_WIDTH, 0, 10 * window_index);
+    window_index++;
     for(index = 0; index < CPU_CORES; index++)
     {
         cpuid = (int *) malloc(sizeof(int));
@@ -478,6 +462,9 @@ void initialize_resources()
             printf("could not create cpu_thread()");
         }
     }
+
+    process_window = newwin(WINDOW_HEIGHT, WINDOW_WIDTH * 4, 0, WINDOW_WIDTH * window_index);
+    wrefresh(process_window);
 }
 
 void create_processes()
@@ -496,6 +483,7 @@ void create_processes()
         list_add_tail(process_queues[NEW], pcb);
         pcb->state = NEW;
         print_pcb(pcb);
+        usleep(500000);
         pthread_mutex_unlock(&mutex);
     }
 }
@@ -546,7 +534,7 @@ void vm()
         update_execution_time();
         
         // take some tome between cycles
-        sleep(VM_SLEEP);    
+        sleep(VM_SLEEP);
     }
 }
 
