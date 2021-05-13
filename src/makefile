@@ -4,9 +4,6 @@ posix-process:
 posix-thread:
 	gcc posix-thread.c -o ${ELARRARTE}/exec/posix-thread -l pthread 
 
-os:
-	gcc os.c -o ${ELARRARTE}/exec/os
-
 os-mt:
 	gcc os-mt.c -o ${ELARRARTE}/exec/os-mt -l pthread -lncurses -lpanel
 
