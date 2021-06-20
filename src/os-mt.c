@@ -98,8 +98,8 @@ typedef struct
 #define CPU_CORES                                           4
 list_t *cpu_queue, *io_queues[IO_DEVICES_SIZE], *process_queues[PROCESS_STATES_SIZE];
 window_list_t windows[IO_DEVICES_SIZE + PROCESS_STATES_SIZE + 1];
-window_t *process_window, *log_window, *debug_window;
-pthread_t cpu_threads[CPU_CORES], io_threads[IO_DEVICES_SIZE], debug_thread;
+window_t *process_window, *log_window, *debug_window, *command_window;
+pthread_t cpu_threads[CPU_CORES], io_threads[IO_DEVICES_SIZE], debug_thread, commands_thread;
 pthread_mutex_t mutex, mutex_gui;
 pcb_t *debug_pcb = NULL;
 
@@ -112,6 +112,7 @@ pcb_t *create_pcb(pid_t pid)
     pcb = (pcb_t *) malloc (sizeof(pcb_t));
     //pcb->priority = LOW;
     pcb->priority = rand() % PROCESS_PRIORITIES_SIZE;
+    pcb->state = NEW;
     pcb->pid = pid;
     pcb->uid = rand() % MAX_UID;
     pcb->gid = rand() % MAX_GID;
@@ -151,7 +152,7 @@ pcb_t *create_process(void)
             return(NULL);
 
         // child process
-        case 0:
+        case 0: 
             exitcode = execl("../exec/os-process", "os-process", NULL);
             if(exitcode == EGENERAL)
             {
@@ -420,6 +421,151 @@ void *io_thread_function(void *vp_device)
     }
 }
 
+#define COMMAND_LINE_SIZE                                   40
+void *commands_thread_function()
+{
+    char command_line[COMMAND_LINE_SIZE], *command, *pid_string;
+    node_t *node;
+    pcb_t *pcb;
+    pid_t pid;
+    bool valid_command;
+    int index;
+
+    while(TRUE)
+    {
+        pthread_mutex_lock(&mutex_gui);
+        wprintw(command_window->user_window, "command> ");
+        pthread_mutex_unlock(&mutex_gui);
+        wgetnstr(command_window->user_window, command_line, 40);
+        command = strtok(command_line, " ");
+        valid_command = FALSE;
+
+        if(command != NULL)
+        {
+            if(!strcmp(command, "help"))
+            {
+                valid_command = TRUE;
+                pthread_mutex_lock(&mutex_gui);
+                wprintw(command_window->user_window, "create_random_process\n");
+                wprintw(command_window->user_window, "start_process ${pid}\n");
+                pthread_mutex_unlock(&mutex_gui);
+            }
+
+            if(!strcmp(command, "create_random_process"))
+            {
+                valid_command = TRUE;
+                pcb = create_process();
+                pthread_mutex_lock(&mutex_gui);
+                wprintw(command_window->user_window, "process created with PID [%d]\n", pcb->pid);
+                pthread_mutex_unlock(&mutex_gui);
+                pthread_mutex_lock(&mutex);
+                list_add_tail(process_queues[NEW], pcb);
+                pthread_mutex_unlock(&mutex);
+                print_pcb(pcb, process_window);
+            }
+
+            if(!strcmp(command, "start_process"))
+            {
+                valid_command = TRUE;
+                pid_string = strtok(NULL, " ");
+                if(pid_string != NULL)
+                {
+                    pid = atoi(pid_string);
+                    pthread_mutex_lock(&mutex);
+                    node = process_queues[NEW]->head;
+                    while(node != NULL)
+                    {
+                        pcb = node->data;
+                        if(pcb->pid == pid)
+                        {
+                            list_remove_data(process_queues[NEW], pcb);
+                            list_add_tail(process_queues[ACTIVE], pcb);
+                            list_add_tail(process_queues[READY], pcb);
+                            pcb->state = READY;
+                            break;
+                        }
+                        node = node->next;
+                    }
+                    pthread_mutex_unlock(&mutex);
+                    if(node == NULL)
+                    {
+                        pthread_mutex_lock(&mutex_gui);
+                        wprintw(command_window->user_window, "ERROR: PID [%d] not found in the NEW queue!\n", pid);
+                        pthread_mutex_unlock(&mutex_gui);
+                    }
+                }
+                else
+                {
+                    pthread_mutex_lock(&mutex_gui);
+                    wprintw(command_window->user_window, "ERROR: start_process ${pid}!\n");
+                    pthread_mutex_unlock(&mutex_gui);
+                }
+            }
+
+            if(!strcmp(command, "debug_process"))
+            {
+                valid_command = TRUE;
+                pid_string = strtok(NULL, " ");
+                if(pid_string != NULL)
+                {
+                    pid = atoi(pid_string);
+                    pthread_mutex_lock(&mutex);
+                    node = process_queues[NEW]->head;
+                    while(node != NULL)
+                    {
+                        pcb = node->data;
+                        if(pcb->pid == pid)
+                        {
+                            debug_pcb = pcb;
+                            print_pcb(pcb, debug_window);
+                            break;
+                        }
+                        node = node->next;
+                    }
+                    pthread_mutex_unlock(&mutex);
+                    if(node == NULL)
+                    {
+                        pthread_mutex_lock(&mutex_gui);
+                        wprintw(command_window->user_window, "ERROR: PID [%d] not found in the NEW queue!\n", pid);
+                        pthread_mutex_unlock(&mutex_gui);
+                    }
+                }
+                else
+                {
+                    pthread_mutex_lock(&mutex_gui);
+                    wprintw(command_window->user_window, "ERROR: debug_process ${pid}!\n");
+                    pthread_mutex_unlock(&mutex_gui);
+                }
+            }
+
+            if(!strcmp(command, "quit"))
+            {
+                valid_command = TRUE;
+
+                for(index = 0; index < IO_DEVICES_SIZE; index++)
+                {
+                    pthread_cancel(io_threads[index]);
+                }
+                
+                for(index = 0; index < CPU_CORES; index++)
+                {
+                    pthread_cancel(cpu_threads[index]);
+                }
+
+                pthread_cancel(debug_thread);
+                pthread_cancel(commands_thread);
+            }
+        }
+
+        if(!valid_command)
+        {
+            pthread_mutex_lock(&mutex_gui);
+            wprintw(command_window->user_window, "ERROR: invalid command [%s]!\n", command);
+            pthread_mutex_unlock(&mutex_gui);
+        }
+    }
+}
+
 void *debug_thread_function()
 {
     while(debug_pcb == NULL) sleep(VM_SLEEP);
@@ -437,7 +583,6 @@ void initilize_gui()
 
     initscr();
     cbreak();
-    noecho();
     curs_set(FALSE);
 
     process_window = window_create(WINDOW_HEIGHT * 3, WINDOW_WIDTH * 4, WINDOW_HEIGHT, 0);
@@ -453,6 +598,10 @@ void initilize_gui()
     window_title(debug_window, "DEBUG");
     wnoutrefresh(debug_window->border_window);
 
+    command_window = window_create(WINDOW_HEIGHT / 2, WINDOW_WIDTH * 14, WINDOW_HEIGHT * 4, 0);
+    scrollok(command_window->user_window, TRUE);
+    window_title(command_window, "COMMANDS");
+    wnoutrefresh(command_window->border_window);
 
     for(index = 0; index < PROCESS_STATES_SIZE; index++)
     {
@@ -544,6 +693,7 @@ void initialize_resources()
     wrefresh(log_window->user_window);
 
     pthread_create(&debug_thread, NULL, debug_thread_function, NULL);
+    pthread_create(&commands_thread, NULL, &commands_thread_function, NULL);
 }
 
 void create_processes()
@@ -612,7 +762,7 @@ void vm()
         print_queues();
 
         // CPU planning
-        cpu_planning();
+        //cpu_planning();
 
         // update execution time on active processes
         update_execution_time();
@@ -628,7 +778,7 @@ int main(void)
     initialize_resources();
 
     // create a bunch of processes
-    create_processes();
+    // create_processes();
 
     // VM
     vm();
