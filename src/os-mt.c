@@ -762,7 +762,7 @@ void vm()
         print_queues();
 
         // CPU planning
-        //cpu_planning();
+        cpu_planning();
 
         // update execution time on active processes
         update_execution_time();
@@ -778,7 +778,7 @@ int main(void)
     initialize_resources();
 
     // create a bunch of processes
-    // create_processes();
+    create_processes();
 
     // VM
     vm();
